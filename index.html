@@ -3,9 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>KONBU ADVENTURE - Official Release</title>
+<title>KONBU ADVENTURE - Mobile Optimized</title>
 <style>
-  /* --- ここからCSS（デザイン設定） --- */
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@400;700;900&display=swap');
   :root {
     --sky: #87ceeb; --accent: #1a7de0; --hp-color: #ff4466; --combo-color: #ffcc00; --score-color: #ffd700;
@@ -46,7 +45,6 @@
   }
   #startBtn:active { transform: translateY(4px); box-shadow: 0 2px 0 #0c4a8e; }
 
-  /* デバッグボタンを非表示に設定 */
   #debugBtn {
     display: none; 
     background: #555; border: 2px solid #aaa; color: #ccc; padding: 8px 16px; 
@@ -120,8 +118,6 @@
 </div>
 
 <script>
-/* --- ここからJavaScript（ゲームの仕組み） --- */
-// (※内容は前回のスペシャルモード演出強化版と同じですが、1つのファイルとして統合されています)
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const rainCanvas = document.getElementById('coinRainCanvas');
@@ -197,7 +193,8 @@ function resize() {
   canvas.width = W; canvas.height = H;
   rainCanvas.width = W; rainCanvas.height = H;
   SCALE = Math.min(W, H) / 400;
-  GROUND_Y = H - (60 * SCALE);
+  // 地面を画面の下部20%に拡大
+  GROUND_Y = H * 0.8; 
 }
 window.addEventListener('resize', resize);
 resize();
