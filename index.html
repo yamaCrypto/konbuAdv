@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>KONBU ADVENTURE - Official Release</title>
+<style>
+  /* --- ここからCSS（デザイン設定） --- */
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@400;700;900&display=swap');
+  :root {
+    --sky: #87ceeb; --accent: #1a7de0; --hp-color: #ff4466; --combo-color: #ffcc00; --score-color: #ffd700;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #222; font-family: 'Press Start 2P', monospace; overflow: hidden; touch-action: none; user-select: none; }
+  
+  #gameWrapper { position: relative; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden;}
+  
+  #gameCanvas { display: block; image-rendering: pixelated; z-index: 1; }
+  #coinRainCanvas { position: absolute; inset: 0; pointer-events: none; z-index: 5; } 
+  #ui { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; padding: 15px; pointer-events: none; z-index: 10; transition: opacity 0.3s; }
+  #damageFlash { position: absolute; inset: 0; background: red; opacity: 0; pointer-events: none; z-index: 15; transition: opacity 0.1s; }
+  #overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 20; gap: 15px; transition: background 0.5s; padding: 20px; }
+
+  .hud-block { background: rgba(255,255,255,0.8); border: 2px solid var(--accent); padding: 6px 10px; border-radius: 4px; min-width: 120px; }
+  .hud-label { font-size: 8px; color: var(--accent); margin-bottom: 4px; }
+  .hud-value { font-size: 14px; color: #1a3a6a; }
+  
+  #combo-panel {
+    position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.5);
+    padding: 10px 20px; border-radius: 50px; border: 2px solid var(--combo-color); opacity: 0; transition: opacity 0.3s;
+  }
+  #combo-img { width: 30px; height: 30px; object-fit: contain; }
+  #combo-text { color: #fff; font-size: 16px; text-shadow: 2px 2px #000; }
+  
+  #hp-display { border-color: var(--hp-color); align-self: flex-start; }
+  #hp-icons { display: flex; gap: 5px; margin-top: 2px; height: 20px; align-items: center; }
+  .heart-img { width: 18px; height: 18px; object-fit: contain; }
+  .heart-img.empty { opacity: 0.3; filter: grayscale(1); }
+
+  .btn-container { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  #startBtn { 
+    background: #1a7de0; border: 4px solid #fff; color: #fff; padding: 18px 40px; 
+    cursor: pointer; font-family: 'Press Start 2P'; border-radius: 8px; pointer-events: auto; 
+    font-size: 16px; box-shadow: 0 6px 0 #0c4a8e; transition: all 0.1s;
+  }
+  #startBtn:active { transform: translateY(4px); box-shadow: 0 2px 0 #0c4a8e; }
+
+  /* デバッグボタンを非表示に設定 */
+  #debugBtn {
+    display: none; 
+    background: #555; border: 2px solid #aaa; color: #ccc; padding: 8px 16px; 
+    cursor: pointer; font-family: 'Press Start 2P'; border-radius: 4px; pointer-events: auto; 
+    font-size: 8px; transition: all 0.1s; margin-top: 10px;
+  }
+
+  #overlay.title-screen, #overlay.gameover-screen { background: rgba(135, 206, 235, 0.95); }
+  #title-bg-konbu {
+    position: absolute; width: 80%; height: 80%;
+    background: url('img/konbuu.png') no-repeat center/contain;
+    opacity: 0.15; z-index: -1;
+  }
+  
+  #overlay h1 { 
+    font-family: 'Orbitron'; font-weight: 900; text-shadow: 4px 4px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff;
+    margin-bottom: 10px; letter-spacing: 2px; text-align: center;
+  }
+  #overlay.title-screen h1 { font-size: 48px; color: #1a5cb0; }
+  #overlay.gameover-screen h1 { font-size: 40px; color: var(--hp-color); }
+
+  #overlay p { color: #1a3a6a; font-size: 12px; margin-bottom: 15px; }
+  #taptostart { animation: blink 1.5s infinite; }
+
+  .final-score-label { font-size: 12px; color: #1a3a6a !important; margin-bottom: 5px; font-weight: bold; }
+  .score-final { font-size: 32px; color: #fff; text-shadow: 3px 3px 0 var(--accent); margin-bottom: 20px; }
+  
+  #coin-report {
+    background: rgba(255,255,255,0.5); border: 2px solid var(--accent); border-radius: 8px;
+    padding: 15px; width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 10px;
+    margin-bottom: 20px;
+  }
+  .report-title { font-size: 10px; color: var(--accent); text-align: center; margin-bottom: 5px; text-decoration: underline; }
+  .coin-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #1a3a6a; }
+  .coin-row-left { display: flex; align-items: center; gap: 10px; }
+  .report-coin-img { width: 20px; height: 20px; object-fit: contain; }
+  .coin-count-val { color: var(--accent); font-weight: bold; }
+
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+</style>
+</head>
+<body>
+<div id="gameWrapper">
+  <canvas id="gameCanvas"></canvas>
+  <canvas id="coinRainCanvas"></canvas>
+  
+  <div id="ui" style="opacity: 0;">
+    <div class="hud-group">
+      <div class="hud-block"><div class="hud-label">SCORE</div><div class="hud-value" id="scoreDisplay">0</div></div>
+      <div class="hud-block"><div class="hud-label">SPEED</div><div class="hud-value"><span id="speedDisplay">0</span> km/h</div></div>
+    </div>
+    <div id="combo-panel"><img id="combo-img" src="" alt=""><div id="combo-text">0 COMBO</div></div>
+    <div class="hud-block" id="hp-display"><div class="hud-label" style="color:var(--hp-color)">LIFE</div><div id="hp-icons"></div></div>
+  </div>
+  
+  <div id="overlay" class="title-screen">
+    <div id="title-bg-konbu"></div>
+    <h1 id="overlayTitle">KONBU ADVENTURE</h1>
+    <div id="resultContent" style="display:none; text-align:center; width:100%; flex-direction:column; align-items:center;">
+      <p class="final-score-label">FINAL SCORE</p>
+      <div id="finalScoreArea" class="score-final">0</div>
+      <div id="coin-report"><div class="report-title">COIN COLLECTION</div></div>
+    </div>
+    <p id="taptostart">TAP TO JUMP / DOUBLE JUMP</p>
+    <div class="btn-container">
+      <button id="startBtn">START GAME</button>
+      <button id="debugBtn">DEBUG START (INF HP)</button>
+    </div>
+  </div>
+  <div id="damageFlash"></div>
+</div>
+
+<script>
+/* --- ここからJavaScript（ゲームの仕組み） --- */
+// (※内容は前回のスペシャルモード演出強化版と同じですが、1つのファイルとして統合されています)
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const rainCanvas = document.getElementById('coinRainCanvas');
+const rainCtx = rainCanvas.getContext('2d');
+const uiLayer = document.getElementById('ui');
+
+const scoreDisplay = document.getElementById('scoreDisplay');
+const speedDisplay = document.getElementById('speedDisplay');
+const hpIcons = document.getElementById('hp-icons');
+const comboPanel = document.getElementById('combo-panel');
+const comboImg = document.getElementById('combo-img');
+const comboText = document.getElementById('combo-text');
+const overlay = document.getElementById('overlay');
+const overlayTitle = document.getElementById('overlayTitle');
+const resultContent = document.getElementById('resultContent');
+const finalScoreArea = document.getElementById('finalScoreArea');
+const coinReport = document.getElementById('coin-report');
+const taptostart = document.getElementById('taptostart');
+const startBtn = document.getElementById('startBtn');
+const debugBtn = document.getElementById('debugBtn');
+const flash = document.getElementById('damageFlash');
+
+const assets = {
+  heart: { img: new Image(), src: 'img/heart.png', ready: false },
+  player: { img: new Image(), src: 'img/konbuu.png', ready: false },
+  coins: [
+    { img: new Image(), src: 'img/coin1.png', ready: false, pts: 10 },
+    { img: new Image(), src: 'img/coin2.png', ready: false, pts: 20 },
+    { img: new Image(), src: 'img/coin3.png', ready: false, pts: 50 },
+    { img: new Image(), src: 'img/coin4.png', ready: false, pts: 100 },
+    { img: new Image(), src: 'img/coin5.png', ready: false, pts: 1000 }
+  ],
+  obstacles: [
+    { img: new Image(), src: 'img/weed1.png', ready: false },
+    { img: new Image(), src: 'img/weed2.png', ready: false },
+    { img: new Image(), src: 'img/weed3.png', ready: false },
+    { img: new Image(), src: 'img/weed4.png', ready: false },
+    { img: new Image(), src: 'img/weed5.png', ready: false }
+  ],
+  bird: { img: new Image(), src: 'img/eagle.png', ready: false },
+  speedUp: { img: new Image(), src: 'img/speedu.png', ready: false },
+  speedDown: { img: new Image(), src: 'img/speedd.png', ready: false }
+};
+
+Object.values(assets).forEach(asset => {
+  if (Array.isArray(asset)) { asset.forEach(a => { a.img.onload = () => a.ready = true; a.img.src = a.src; }); }
+  else { asset.img.onload = () => asset.ready = true; asset.img.src = asset.src; }
+});
+
+let W, H, GROUND_Y, SCALE;
+let state = 'title', score = 0, hp = 5, frameCount = 0, speed = 0, invincibility = 0;
+let animationId = null, nextCoinFrame = 0, nextSpecialFrame = 0;
+let baseSpeedModifier = 0, lastCoinType = null, comboCount = 0;
+let obstacles = [], items = [], clouds = [], popups = [], rainCoins = [];
+let sessionCoinCounts = [0, 0, 0, 0, 0]; 
+
+let specialModeTimer = 0;
+let specialCoinType = null;
+let nextSpecialCoinFrame = 0; 
+
+const BASE_SPEED = 5;
+const MAX_SPEED_REACH_SEC = 240;
+const MAX_SPEED_LOGIC = BASE_SPEED * 2.5; 
+
+const COLORS = {
+  DAY_TOP: [142, 214, 255], DAY_BTM: [172, 229, 238],
+  EVE_TOP: [255, 120, 50],  EVE_BTM: [255, 200, 100],
+  NIT_TOP: [20, 24, 82],    NIT_BTM: [45, 52, 138]
+};
+
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W; canvas.height = H;
+  rainCanvas.width = W; rainCanvas.height = H;
+  SCALE = Math.min(W, H) / 400;
+  GROUND_Y = H - (60 * SCALE);
+}
+window.addEventListener('resize', resize);
+resize();
+
+function lerpColor(c1, c2, t) {
+  return [
+    Math.round(c1[0] + (c2[0] - c1[0]) * t),
+    Math.round(c1[1] + (c2[1] - c1[1]) * t),
+    Math.round(c1[2] + (c2[2] - c1[2]) * t)
+  ];
+}
+
+function getSkyColors(frame) {
+  const cycle = frame % 12000;
+  let top, btm;
+  if (cycle < 6000) { top = COLORS.DAY_TOP; btm = COLORS.DAY_BTM;
+    if (cycle > 5000) { const t = (cycle - 5000) / 1000; top = lerpColor(COLORS.DAY_TOP, COLORS.EVE_TOP, t); btm = lerpColor(COLORS.DAY_BTM, COLORS.EVE_BTM, t); }
+  } else if (cycle < 9000) { top = COLORS.EVE_TOP; btm = COLORS.EVE_BTM;
+    if (cycle > 8000) { const t = (cycle - 8000) / 1000; top = lerpColor(COLORS.EVE_TOP, COLORS.NIT_TOP, t); btm = lerpColor(COLORS.EVE_BTM, COLORS.NIT_BTM, t); }
+  } else { top = COLORS.NIT_TOP; btm = COLORS.NIT_BTM;
+    if (cycle > 11000) { const t = (cycle - 11000) / 1000; top = lerpColor(COLORS.NIT_TOP, COLORS.DAY_TOP, t); btm = lerpColor(COLORS.NIT_BTM, COLORS.DAY_BTM, t); }
+  }
+  return { top: `rgb(${top[0]},${top[1]},${top[2]})`, btm: `rgb(${btm[0]},${btm[1]},${btm[2]})` };
+}
+
+function updateLifeUI() {
+  hpIcons.innerHTML = '';
+  const displayHp = hp > 5 ? 5 : hp;
+  for (let i = 0; i < 5; i++) {
+    const img = document.createElement('img'); img.src = assets.heart.src;
+    img.className = i < displayHp ? 'heart-img' : 'heart-img empty';
+    hpIcons.appendChild(img);
+  }
+  if(hp > 5) {
+    const span = document.createElement('span'); span.style.fontSize = "10px"; span.style.color = "var(--hp-color)"; span.style.marginLeft = "5px";
+    span.textContent = "x" + hp; hpIcons.appendChild(span);
+  }
+}
+
+function updateComboUI() {
+  if (comboCount > 0 && lastCoinType !== null) {
+    comboPanel.style.opacity = '1';
+    const coinIdx = [10, 20, 50, 100, 1000].indexOf(lastCoinType);
+    if(coinIdx !== -1 && assets.coins[coinIdx].ready) {
+        comboImg.src = assets.coins[coinIdx].src; comboText.textContent = `${comboCount} COMBO`;
+    }
+  } else { comboPanel.style.opacity = '0'; }
+}
+
+function getKmh() { return Math.floor(((speed / SCALE) / MAX_SPEED_LOGIC) * 100); }
+function updateSpeedUI() { speedDisplay.textContent = Math.max(0, getKmh()); }
+
+function createRainCoin(isSpecialMode = false) {
+  const coinIdx = isSpecialMode ? [10, 20, 50, 100, 1000].indexOf(specialCoinType) : Math.floor(Math.random() * assets.coins.length);
+  const coinAsset = assets.coins[coinIdx];
+  if (!coinAsset || !coinAsset.ready) return;
+  rainCoins.push({
+    img: coinAsset.img, x: Math.random() * W, y: -50, vy: (1 + Math.random() * 2),
+    angle: Math.random() * Math.PI * 2, va: (Math.random() - 0.5) * 0.1,
+    size: (18 + Math.random() * 12) * SCALE, opacity: isSpecialMode ? 0.3 : (0.6 + Math.random() * 0.3)
+  });
+}
+
+function updateAndDrawRain() {
+  rainCtx.clearRect(0, 0, W, H);
+  if (state === 'playing' || state === 'dying') { 
+    if (specialModeTimer > 0) { if (Math.random() < 0.25) createRainCoin(true); } else { rainCoins = []; }
+  } else {
+    if (Math.random() < 0.05) createRainCoin(false);
+  }
+  rainCoins = rainCoins.filter(c => {
+    c.y += c.vy; c.angle += c.va;
+    rainCtx.save(); rainCtx.globalAlpha = c.opacity;
+    rainCtx.translate(c.x, c.y); rainCtx.rotate(c.angle);
+    rainCtx.drawImage(c.img, -c.size/2, -c.size/2, c.size, c.size);
+    rainCtx.restore();
+    return c.y < H + 50;
+  });
+  requestAnimationFrame(updateAndDrawRain);
+}
+
+class Player {
+  constructor() {
+    this.w = 60 * SCALE; this.h = 60 * SCALE;
+    this.x = W * 0.1; this.y = GROUND_Y - this.h;
+    this.vy = 0; this.jumps = 0; this.gravity = 0.55 * SCALE; this.jumpForce = -12 * SCALE;
+    this.isDead = false; this.opacity = 1.0;
+  }
+  update() {
+    this.vy += this.gravity; this.y += this.vy;
+    if (!this.isDead) { if (this.y > GROUND_Y - this.h) { this.y = GROUND_Y - this.h; this.vy = 0; this.jumps = 0; } }
+    else { this.opacity -= 0.02; }
+  }
+  draw() {
+    if (!this.isDead && invincibility % 10 > 5) return;
+    ctx.save(); ctx.globalAlpha = Math.max(0, this.opacity);
+    if (this.isDead) { ctx.translate(this.x + this.w / 2, this.y + this.h / 2); ctx.scale(1, -1); ctx.translate(-(this.x + this.w / 2), -(this.y + this.h / 2)); }
+    if (assets.player.ready) ctx.drawImage(assets.player.img, this.x, this.y, this.w, this.h);
+    ctx.restore();
+  }
+  jump() { if (this.jumps < 2 && !this.isDead) { this.vy = this.jumpForce; this.jumps++; } }
+  startDieAnimation() { this.isDead = true; this.vy = -10 * SCALE; this.jumps = 99; }
+}
+
+class Cloud {
+  constructor() {
+    this.w = (60 + Math.random() * 40) * SCALE; this.h = (15 + Math.random() * 10) * SCALE;
+    this.x = W + this.w; this.y = (Math.random() * GROUND_Y * 0.4) + 20 * SCALE;
+    this.speed = (0.3 + Math.random() * 0.8) * SCALE;
+    this.circles = [];
+    for(let i=0; i<6; i++) this.circles.push({ ox: (i/6-0.5)*this.w*0.8, oy: (Math.random()-0.5)*this.h*0.3, rx: (this.w/6)*1.5, ry: this.h/1.5 });
+  }
+  update() { this.x -= this.speed; }
+  draw() { ctx.fillStyle = "white"; this.circles.forEach(c => { ctx.beginPath(); ctx.ellipse(this.x + c.ox, this.y + c.oy, c.rx, c.ry, 0, 0, Math.PI * 2); ctx.fill(); }); }
+}
+
+class Item {
+  constructor(info) {
+    this.type = info.type; this.pts = info.pts || 0; this.assetKey = info.assetKey;
+    this.isSpecial = info.isSpecial || false;
+    const baseR = (this.type === 'coin' ? 17.28 : (this.type === 'bird' ? 27 : 18));
+    this.r = baseR * SCALE;
+    this.x = W + this.r; this.y = GROUND_Y - (50 + Math.random() * 150) * SCALE;
+  }
+  update() { if (state === 'playing') this.x -= speed; }
+  draw() {
+    let targetAsset = (this.type === 'coin') ? assets.coins[[10, 20, 50, 100, 1000].indexOf(this.pts)] : assets[this.assetKey];
+    if (targetAsset && targetAsset.ready) {
+      if (this.isSpecial) {
+        ctx.save();
+        const hue = (frameCount * 5) % 360;
+        ctx.shadowBlur = 15 * SCALE; 
+        ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r * 1.3, 0, Math.PI * 2); 
+        const grad = ctx.createRadialGradient(this.x, this.y, this.r * 0.8, this.x, this.y, this.r * 1.3);
+        grad.addColorStop(0, `hsla(${hue}, 100%, 50%, 0)`);
+        grad.addColorStop(0.5, `hsla(${hue}, 100%, 50%, 0.8)`);
+        grad.addColorStop(1, `hsla(${hue}, 100%, 50%, 0)`);
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.drawImage(targetAsset.img, this.x - this.r, this.y - this.r, this.r * 2, this.r * 2);
+    }
+  }
+}
+
+class ScorePopup {
+  constructor(x, y, text, color="#fff", isBanner=false) {
+    this.x = x; this.y = y; this.lines = text.split('\n'); this.color = color; this.life = 60; this.vy = -1.5 * SCALE;
+    this.isBanner = isBanner;
+  }
+  update() { 
+    if(!this.isBanner) this.y += this.vy; 
+    else this.y -= 0.5 * SCALE;
+    this.life--; 
+  }
+  draw() {
+    ctx.save(); ctx.globalAlpha = this.life / 60;
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 4 * SCALE; 
+    ctx.font = `${(this.isBanner ? 16 : 12) * SCALE}px 'Press Start 2P'`; ctx.textAlign = 'center';
+    const lineHeight = (this.isBanner ? 20 : 16) * SCALE;
+    this.lines.forEach((line, index) => { const py = this.y + (index * lineHeight); ctx.strokeText(line, this.x, py); ctx.fillStyle = this.color; ctx.fillText(line, this.x, py); });
+    ctx.restore();
+  }
+}
+
+function initGame(isDebug = false) {
+  score = 0; hp = isDebug ? 99999 : 5; 
+  frameCount = 0; invincibility = 0; baseSpeedModifier = 0; comboCount = 0; lastCoinType = null;
+  sessionCoinCounts = [0, 0, 0, 0, 0];
+  specialModeTimer = 0; specialCoinType = null;
+  speed = BASE_SPEED * SCALE;
+  obstacles = []; items = []; clouds = []; popups = [];
+  player = new Player();
+  nextCoinFrame = 60; nextSpecialFrame = 120;
+  nextSpecialCoinFrame = frameCount + Math.floor(60 * (20 + Math.random() * 40));
+  for(let i=0; i<6; i++) { let c = new Cloud(); c.x = Math.random() * W; clouds.push(c); }
+  updateLifeUI(); updateSpeedUI(); updateComboUI();
+  uiLayer.style.opacity = '1'; 
+}
+
+function getCoinPts() {
+  const cR = Math.random() * 100;
+  return (cR < 50) ? 10 : (cR < 80) ? 20 : (cR < 93) ? 50 : (cR < 99) ? 100 : 1000;
+}
+
+function loop() {
+  if (state === 'title' || state === 'gameover') return;
+  ctx.clearRect(0, 0, W, H);
+  if (state === 'playing') frameCount++;
+  
+  const skyColors = getSkyColors(frameCount);
+  let skyGrad = ctx.createLinearGradient(0, 0, 0, GROUND_Y); skyGrad.addColorStop(0, skyColors.top); skyGrad.addColorStop(1, skyColors.btm);
+  ctx.fillStyle = skyGrad; ctx.fillRect(0, 0, W, GROUND_Y + 1);
+  let groundGrad = ctx.createLinearGradient(0, GROUND_Y, 0, H); groundGrad.addColorStop(0, '#7cd650'); groundGrad.addColorStop(1, '#3d8c22');
+  ctx.fillStyle = groundGrad; ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+
+  if (specialModeTimer > 0) {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  if (state === 'playing') {
+    const timeProgress = Math.min(frameCount / (MAX_SPEED_REACH_SEC * 60), 1);
+    const naturalSpeed = (BASE_SPEED * SCALE) + (BASE_SPEED * SCALE * (MAX_SPEED_LOGIC / BASE_SPEED - 1)) * timeProgress;
+    speed = Math.max(BASE_SPEED * SCALE, naturalSpeed + baseSpeedModifier);
+    score += (speed / (BASE_SPEED * SCALE)) * 0.1;
+
+    if (specialModeTimer > 0) {
+      specialModeTimer--;
+      if (specialModeTimer % 30 === 0 && specialModeTimer > 0) {
+        items.push(new Item({ type: 'coin', pts: specialCoinType, isSpecial: false }));
+      }
+      if (specialModeTimer === 0) {
+        nextSpecialCoinFrame = frameCount + Math.floor(60 * (20 + Math.random() * 40));
+      }
+    }
+  } else speed = 0;
+
+  scoreDisplay.textContent = Math.floor(score); updateSpeedUI();
+  clouds.forEach(c => { c.update(); c.draw(); });
+  if (state === 'playing' && frameCount % 120 === 0) clouds.push(new Cloud());
+  
+  if (state === 'playing') { 
+    if (frameCount % Math.max(50, Math.floor(140 - speed * 2)) === 0) { 
+      obstacles.push({ 
+        x: W, y: GROUND_Y - 64 * SCALE, w: 48 * SCALE, h: 64 * SCALE,
+        weedIdx: Math.floor(Math.random() * assets.obstacles.length)
+      }); 
+    }
+
+    if (specialModeTimer === 0) {
+      if (frameCount >= nextCoinFrame) {
+        items.push(new Item({ type: 'coin', pts: getCoinPts(), isSpecial: false }));
+        nextCoinFrame = frameCount + (60 + Math.random() * 180);
+      }
+      if (frameCount >= nextSpecialFrame) {
+        const rand = Math.random() * 100;
+        let info;
+        if (rand < 85) info = { type: 'bird', assetKey: 'bird' }; 
+        else if (rand < 90) info = { type: 'life', assetKey: 'heart' }; 
+        else if (rand < 95) info = { type: 'speedUp', assetKey: 'speedUp' }; 
+        else info = { type: 'speedDown', assetKey: 'speedDown' }; 
+        items.push(new Item(info));
+        nextSpecialFrame = frameCount + (120 + Math.random() * 240);
+      }
+      if (frameCount >= nextSpecialCoinFrame) {
+        items.push(new Item({ type: 'coin', pts: getCoinPts(), isSpecial: true }));
+        nextSpecialCoinFrame = 99999999;
+      }
+    }
+  }
+
+  obstacles = obstacles.filter(o => {
+    if (state === 'playing') o.x -= speed;
+    const weedAsset = assets.obstacles[o.weedIdx];
+    if (weedAsset && weedAsset.ready) ctx.drawImage(weedAsset.img, o.x, GROUND_Y - o.h, o.w, o.h);
+    else { ctx.fillStyle = '#ff4466'; ctx.fillRect(o.x, GROUND_Y - o.h, o.w, o.h); }
+    const hitW = o.w * 0.7; const hitH = o.h * 0.8;
+    const hitX = o.x + (o.w - hitW) / 2; const hitY = (GROUND_Y - o.h) + (o.h - hitH) / 2;
+    if (state === 'playing' && invincibility === 0 && 
+        player.x < hitX + hitW && player.x + player.w > hitX && 
+        player.y < hitY + hitH && player.y + player.h > hitY) {
+      handleDamage("痛ｯ！");
+    }
+    return o.x + o.w > 0;
+  });
+
+  player.update(); player.draw();
+
+  items = items.filter(it => {
+    it.update(); it.draw();
+    if (state === 'playing') {
+      const dx = player.x + player.w / 2 - it.x, dy = player.y + player.h / 2 - it.y;
+      if (Math.sqrt(dx * dx + dy * dy) < it.r + player.w / 3) { applyItemEffect(it); return false; }
+    }
+    return it.x + it.r > 0;
+  });
+
+  popups.forEach(p => { p.update(); p.draw(); }); popups = popups.filter(p => p.life > 0);
+  if (invincibility > 0) invincibility--;
+  animationId = requestAnimationFrame(loop);
+}
+
+function applyItemEffect(it) {
+  const sV = (10 / 100) * MAX_SPEED_LOGIC * SCALE;
+  if (it.type === 'coin') {
+    if (it.isSpecial) {
+      specialModeTimer = 600; 
+      specialCoinType = it.pts;
+      popups.push(new ScorePopup(W/2, player.y - 40 * SCALE, "!!! SPECIAL MODE !!!", "#ff00ff", true));
+    }
+    const coinTypeIdx = [10, 20, 50, 100, 1000].indexOf(it.pts);
+    if(coinTypeIdx !== -1) sessionCoinCounts[coinTypeIdx]++;
+    
+    if (lastCoinType === it.pts) comboCount++; else { comboCount = 1; lastCoinType = it.pts; }
+    
+    const addedScore = Math.min(1000, it.pts * Math.pow(2, comboCount - 1)); 
+    score += addedScore;
+
+    let msg = `${Math.floor(addedScore)}pts`; 
+    if (comboCount > 1) msg += `\n${comboCount} COMBO!`;
+    popups.push(new ScorePopup(it.x, it.y, msg, comboCount > 1 ? "#ffcc00" : "#fff"));
+    updateComboUI();
+  } else {
+    comboCount = 0; lastCoinType = null; updateComboUI();
+    switch(it.type) {
+      case 'life': hp = Math.min(99999, hp + 1); updateLifeUI(); popups.push(new ScorePopup(it.x, it.y, "LIFE UP!", "#ff66aa")); break;
+      case 'bird': handleDamage("痛ｯ！"); break;
+      case 'speedUp': baseSpeedModifier += sV; popups.push(new ScorePopup(it.x, it.y, "+10 km/h", "#ffaa00")); break;
+      case 'speedDown': baseSpeedModifier -= sV; popups.push(new ScorePopup(it.x, it.y, "-10 km/h", "#44ff44")); break;
+    }
+  }
+}
+
+function handleDamage(msg = "") {
+  if (invincibility > 0 || state !== 'playing') return;
+  hp--; invincibility = 60; updateLifeUI(); comboCount = 0; lastCoinType = null; updateComboUI();
+  if (msg) popups.push(new ScorePopup(player.x + player.w/2, player.y, msg, "#ff4466"));
+  flash.style.opacity = "0.5"; setTimeout(() => flash.style.opacity = "0", 150);
+  if (hp <= 0) { state = 'dying'; player.startDieAnimation(); setTimeout(showGameOverScreen, 2000); }
+}
+
+function showGameOverScreen() {
+  state = 'gameover'; cancelAnimationFrame(animationId);
+  overlay.className = 'gameover-screen'; overlayTitle.textContent = "GAME OVER";
+  taptostart.style.display = 'none'; resultContent.style.display = 'flex';
+  finalScoreArea.textContent = Math.floor(score);
+  coinReport.innerHTML = '<div class="report-title">COIN COLLECTION</div>';
+  let hasCoins = false;
+  assets.coins.forEach((coinAsset, idx) => {
+    const count = sessionCoinCounts[idx];
+    if (count > 0) {
+        hasCoins = true;
+        const row = document.createElement('div'); row.className = 'coin-row';
+        const left = document.createElement('div'); left.className = 'coin-row-left';
+        if(coinAsset.ready) { const img = document.createElement('img'); img.src = coinAsset.src; img.className = 'report-coin-img'; left.appendChild(img); }
+        const label = document.createElement('span'); label.textContent = `${coinAsset.pts} pts`; left.appendChild(label);
+        const countSpan = document.createElement('span'); countSpan.className = 'coin-count-val'; countSpan.textContent = `x ${count}`;
+        row.appendChild(left); row.appendChild(countSpan); coinReport.appendChild(row);
+    }
+  });
+  if(!hasCoins) coinReport.innerHTML += '<div style="font-size:10px; color:#888; text-align:center; padding:10px;">No coins collected...</div>';
+  startBtn.textContent = "RETRY"; overlay.style.display = 'flex'; uiLayer.style.opacity = '0'; 
+}
+
+function handleInput(e) { if (state === 'playing') { player.jump(); if (e && e.cancelable) e.preventDefault(); } }
+window.addEventListener('mousedown', handleInput); window.addEventListener('touchstart', handleInput, { passive: false });
+window.addEventListener('keydown', (e) => { if (e.code === 'Space') handleInput(e); });
+
+startBtn.addEventListener('click', (e) => {
+  e.preventDefault(); if (state === 'playing' || state === 'dying') return;
+  state = 'playing'; overlay.style.display = 'none'; initGame(false);
+  if (animationId) cancelAnimationFrame(animationId); loop();
+});
+
+debugBtn.addEventListener('click', (e) => {
+  e.preventDefault(); if (state === 'playing' || state === 'dying') return;
+  state = 'playing'; overlay.style.display = 'none'; initGame(true);
+  if (animationId) cancelAnimationFrame(animationId); loop();
+});
+
+resize(); updateLifeUI(); updateAndDrawRain(); 
+</script>
+</body>
+</html>
